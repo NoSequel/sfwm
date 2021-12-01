@@ -1,5 +1,5 @@
 use crate::layout::layout::{DragState, WmLayout, WmState};
-use x11rb::{connection::Connection, protocol::xproto::*};
+use x11rb::{CURRENT_TIME, connection::Connection, protocol::xproto::*};
 
 struct FloatingWmLayout;
 
@@ -72,16 +72,42 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::EnterNotifyEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+        let window_state = state
+            .windows
+            .iter()
+            .find(|window_state| state.is_window_id(event.event, window_state));
+
+        if let Some(window_state) = window_state {
+            state
+                .connection
+                .set_input_focus(InputFocus::PARENT, window_state.window, CURRENT_TIME)?;
+
+            state
+                .connection
+                .configure_window(
+                    window_state.frame_window,
+                    &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
+                )?;
+        }
+
         Ok(())
     }
 
-    fn expose(&self, state: &mut WmState<T>, event: x11rb::protocol::xproto::ExposeEvent) {}
+    fn expose(&self, state: &mut WmState<T>, event: x11rb::protocol::xproto::ExposeEvent) {
+        state.pending_expose.push(event.window);
+    }
 
     fn map_request(
         &self,
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::MapRequestEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+        self.manage_window(
+            state,
+            event.window,
+            &state.connection.get_geometry(event.window)?.reply()?,
+        )?;
+
         Ok(())
     }
 
@@ -89,7 +115,7 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         &self,
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::ConfigureRequestEvent,
-    ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+    ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> { 
         Ok(())
     }
 
