@@ -9,12 +9,12 @@ use x11rb::{
 
 /// This struct represents the state of a single window within the window manager.
 #[derive(Debug)]
-struct WindowState {
-    window: Window,
-    frame_window: Window,
-    x: i16,
-    y: i16,
-    width: u16,
+pub struct WindowState {
+    pub window: Window,
+    pub frame_window: Window,
+    pub x: i16,
+    pub y: i16,
+    pub width: u16,
 }
 
 impl WindowState {
@@ -29,29 +29,40 @@ impl WindowState {
     }
 }
 
-struct DragState {
-    window: WindowState,
-    x: i16,
-    y: i16,
+pub enum DragType {
+    Resize,
+    Move,
+}
+
+pub struct DragState {
+    pub window: WindowState,
+    pub drag_type: DragType,
+    pub x: i16,
+    pub y: i16,
 }
 
 impl DragState {
-    pub fn new(window: WindowState, x: i16, y: i16) -> Self {
-        Self { window, x, y }
+    pub fn new(window: WindowState, drag_type: DragType, x: i16, y: i16) -> Self {
+        Self {
+            window,
+            drag_type,
+            x,
+            y,
+        }
     }
 }
 
-struct WmState<'a, C: Connection> {
-    connection: &'a C,
-    screen_num: usize,
-    black_gc: Gcontext,
-    windows: Vec<WindowState>,
-    pending_expose: Vec<Window>,
-    wm_protocols: Atom,
-    wm_delete_window: Atom,
-    sequences_to_ignore: BinaryHeap<Reverse<u16>>,
-    drag_window: Option<DragState>,
-    layout: &'a dyn WmLayout<C>,
+pub struct WmState<'a, C: Connection> {
+    pub connection: &'a C,
+    pub screen_num: usize,
+    pub black_gc: Gcontext,
+    pub windows: Vec<WindowState>,
+    pub pending_expose: Vec<Window>,
+    pub wm_protocols: Atom,
+    pub wm_delete_window: Atom,
+    pub sequences_to_ignore: BinaryHeap<Reverse<u16>>,
+    pub drag_window: Option<DragState>,
+    pub layout: &'a dyn WmLayout<C>,
 }
 
 impl<'a, C: Connection> WmState<'a, C> {
@@ -111,20 +122,31 @@ impl<'a, C: Connection> WmState<'a, C> {
         Ok(())
     }
 
-    fn handle_event(
-        &mut self,
-        event: Event
-    ) -> Result<(), ReplyOrIdError> {
+    pub fn is_window_id(&self, window: Window, state: &WindowState) -> bool {
+        window == state.window || window == state.frame_window
+    }
+
+    fn handle_event(&mut self, event: Event) -> Result<(), ReplyOrIdError> {
         if let Some(sequence) = event.wire_sequence_number() {
             while let Some(&Reverse(to_ignore)) = self.sequences_to_ignore.peek() {
                 if to_ignore.wrapping_sub(sequence) <= u16::max_value() / 2 {
-                    return Ok(())
+                    return Ok(());
                 }
             }
         }
 
+        let layout = self.layout;
+
         match event {
-            _ => println!("Unhandled X11 event, {:?}", event)
+            Event::UnmapNotify(event) => layout.unmap_notify(self, event),
+            Event::ConfigureRequest(event) => layout.configure_request(self, event)?,
+            Event::MapRequest(event) => layout.map_request(self, event)?,
+            Event::Expose(event) => layout.expose(self, event),
+            Event::EnterNotify(event) => layout.enter(self, event)?,
+            Event::ButtonPress(event) => layout.button_press(self, event)?,
+            Event::ButtonRelease(event) => layout.button_release(self, event)?,
+            Event::MotionNotify(event) => layout.motion_notify(self, event)?,
+            _ => println!("Unhandled X11 event, {:?}", event),
         }
 
         Ok(())
@@ -140,13 +162,51 @@ impl<'a, C: Connection> WmState<'a, C> {
 /// - Workspace handling
 /// - Handling windows
 /// - And much more
-///
-/// [^note] Inspired by https://github.com/dylanaraps/sowm
-trait WmLayout<T: Connection> {
+pub trait WmLayout<T: Connection> {
     fn manage_window(
         &self,
         state: &mut WmState<T>,
         window: Window,
         geometry: &GetGeometryReply,
+    ) -> Result<(), ReplyOrIdError>;
+
+    fn unmap_notify(&self, state: &mut WmState<T>, event: UnmapNotifyEvent);
+
+    fn configure_request(
+        &self,
+        state: &mut WmState<T>,
+        event: ConfigureRequestEvent,
+    ) -> Result<(), ReplyOrIdError>;
+
+    fn map_request(
+        &self,
+        state: &mut WmState<T>,
+        event: MapRequestEvent,
+    ) -> Result<(), ReplyOrIdError>;
+
+    fn expose(
+        &self,
+        state: &mut WmState<T>,
+        event: ExposeEvent, // fucking exposed dude
+    );
+
+    fn enter(&self, state: &mut WmState<T>, event: EnterNotifyEvent) -> Result<(), ReplyOrIdError>;
+
+    fn button_press(
+        &self,
+        state: &mut WmState<T>,
+        event: ButtonPressEvent,
+    ) -> Result<(), ReplyOrIdError>;
+
+    fn button_release(
+        &self,
+        state: &mut WmState<T>,
+        event: ButtonReleaseEvent,
+    ) -> Result<(), ReplyOrIdError>;
+
+    fn motion_notify(
+        &self,
+        state: &mut WmState<T>,
+        event: MotionNotifyEvent,
     ) -> Result<(), ReplyOrIdError>;
 }
