@@ -31,12 +31,7 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
             state.drag_window = None;
         }
 
-        let window_state = state
-            .windows
-            .iter()
-            .find(|window_state| state.is_window_id(event.event, window_state));
-
-        if let Some(window_state) = window_state {
+        if let Some(window_state) = state.find_window(event.event) {
             // button event handling
         }
 
@@ -49,12 +44,7 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         event: x11rb::protocol::xproto::ButtonPressEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
         if event.detail == 1 {
-            let window_state = state
-                .windows
-                .iter()
-                .find(|window_state| state.is_window_id(event.event, window_state));
-
-            if let Some(window_state) = window_state {
+            if let Some(window_state) = state.find_window(event.event) {
                 state.drag_window = Some(DragState::new(
                     *window_state,
                     super::layout::DragType::Move,
@@ -72,12 +62,7 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::EnterNotifyEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
-        let window_state = state
-            .windows
-            .iter()
-            .find(|window_state| state.is_window_id(event.event, window_state));
-
-        if let Some(window_state) = window_state {
+        if let Some(window_state) = state.find_window(event.event) {
             state
                 .connection
                 .set_input_focus(InputFocus::PARENT, window_state.window, CURRENT_TIME)?;

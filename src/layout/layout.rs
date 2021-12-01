@@ -122,6 +122,15 @@ impl<'a, C: Connection> WmState<'a, C> {
         Ok(())
     }
 
+    pub fn find_window(
+        &self,
+        window: Window,
+    ) -> Option<&WindowState> {
+        self.windows
+            .iter()
+            .find(|window_state| self.is_window_id(window, window_state))
+    }
+
     pub fn is_window_id(&self, window: Window, state: &WindowState) -> bool {
         window == state.window || window == state.frame_window
     }
