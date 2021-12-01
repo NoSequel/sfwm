@@ -55,7 +55,11 @@ struct WmState<'a, C: Connection> {
 }
 
 impl<'a, C: Connection> WmState<'a, C> {
-    pub fn new(connection: &'a C, layout: &'a dyn WmLayout<C>, screen_num: usize) -> Result<WmState<'a, C>, ReplyOrIdError> {
+    pub fn new(
+        connection: &'a C,
+        layout: &'a dyn WmLayout<C>,
+        screen_num: usize,
+    ) -> Result<WmState<'a, C>, ReplyOrIdError> {
         let screen = &connection.setup().roots[screen_num];
         let black_gc = connection.generate_id()?;
         let font = connection.generate_id()?;
@@ -85,9 +89,7 @@ impl<'a, C: Connection> WmState<'a, C> {
         })
     }
 
-    pub fn scan_windows(
-        &mut self
-    ) -> Result<(), ReplyOrIdError> {
+    pub fn scan_windows(&mut self) -> Result<(), ReplyOrIdError> {
         let screen = &self.connection.setup().roots[self.screen_num];
         let tree_reply = self.connection.query_tree(screen.root)?.reply()?;
 
@@ -104,6 +106,25 @@ impl<'a, C: Connection> WmState<'a, C> {
                     self.layout.manage_window(self, window, &geometry);
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    fn handle_event(
+        &mut self,
+        event: Event
+    ) -> Result<(), ReplyOrIdError> {
+        if let Some(sequence) = event.wire_sequence_number() {
+            while let Some(&Reverse(to_ignore)) = self.sequences_to_ignore.peek() {
+                if to_ignore.wrapping_sub(sequence) <= u16::max_value() / 2 {
+                    return Ok(())
+                }
+            }
+        }
+
+        match event {
+            _ => println!("Unhandled X11 event, {:?}", event)
         }
 
         Ok(())
@@ -126,6 +147,6 @@ trait WmLayout<T: Connection> {
         &self,
         state: &mut WmState<T>,
         window: Window,
-        geometry: &GetGeometryReply
+        geometry: &GetGeometryReply,
     ) -> Result<(), ReplyOrIdError>;
 }
