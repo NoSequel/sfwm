@@ -2,12 +2,9 @@ use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
 use x11rb::{
-    rust_connection::ReplyOrIdError,
     connection::Connection,
-    protocol::{
-        xproto::*,
-        Event,
-    },
+    protocol::{xproto::*, Event},
+    rust_connection::ReplyOrIdError,
 };
 
 /// This struct represents the state of a single window within the window manager.
@@ -40,11 +37,7 @@ struct DragState {
 
 impl DragState {
     pub fn new(window: WindowState, x: i16, y: i16) -> Self {
-        Self {
-            window,
-            x,
-            y
-        }
+        Self { window, x, y }
     }
 }
 
@@ -58,10 +51,11 @@ struct WmState<'a, C: Connection> {
     wm_delete_window: Atom,
     sequences_to_ignore: BinaryHeap<Reverse<u16>>,
     drag_window: Option<DragState>,
+    layout: &'a dyn WmLayout<C>,
 }
 
 impl<'a, C: Connection> WmState<'a, C> {
-   pub fn new(connection: &'a C, screen_num: usize) -> Result<WmState<'a, C>, ReplyOrIdError> {
+    pub fn new(connection: &'a C, layout: &'a dyn WmLayout<C>, screen_num: usize) -> Result<WmState<'a, C>, ReplyOrIdError> {
         let screen = &connection.setup().roots[screen_num];
         let black_gc = connection.generate_id()?;
         let font = connection.generate_id()?;
@@ -73,12 +67,13 @@ impl<'a, C: Connection> WmState<'a, C> {
             .font(font);
 
         connection.create_gc(black_gc, screen.root, &gc_aux)?;
-        
+
         let wm_protocols = connection.intern_atom(false, b"WM_PROTOCOLS")?;
         let wm_delete_window = connection.intern_atom(false, b"WM_DELETE_WINDOW")?;
 
         Ok(Self {
             connection,
+            layout,
             screen_num,
             black_gc,
             windows: vec![],
@@ -86,14 +81,33 @@ impl<'a, C: Connection> WmState<'a, C> {
             wm_protocols: wm_protocols.reply()?.atom,
             wm_delete_window: wm_delete_window.reply()?.atom,
             sequences_to_ignore: Default::default(),
-            drag_window: None
+            drag_window: None,
         })
-   }
+    }
 
-   pub fn scan_windows(&mut self) -> Result<(), ReplyOrIdError> {
+    pub fn scan_windows(
+        &mut self
+    ) -> Result<(), ReplyOrIdError> {
         let screen = &self.connection.setup().roots[self.screen_num];
         let tree_reply = self.connection.query_tree(screen.root)?.reply()?;
-   }
+
+        for window in tree_reply.children {
+            let geometry = self.connection.get_geometry(window)?;
+            let attributes = self.connection.get_window_attributes(window)?;
+
+            let (attributes, geometry) = (attributes.reply(), geometry.reply());
+
+            if attributes.is_ok() && geometry.is_ok() {
+                let (attributes, geometry) = (attributes.unwrap(), geometry.unwrap());
+
+                if !attributes.override_redirect && attributes.map_state != MapState::UNMAPPED {
+                    self.layout.manage_window(self, window, &geometry);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Abstraction for making multiple layouts easily.
@@ -107,26 +121,11 @@ impl<'a, C: Connection> WmState<'a, C> {
 /// - And much more
 ///
 /// [^note] Inspired by https://github.com/dylanaraps/sowm
-trait Layout<T: Connection>: ButtonHandler {
-    fn new_window(window: Window);
-    fn close_window(window: Window);
-}
-
-/// Abstraction for making multiple different types of button handlers.
-///
-/// Provides an abstraction layer to easily implement several different handlers for
-/// button presses.
-///
-/// A button handler should handle the following:
-/// - Key and button presses,
-/// - Possibly button mappings
-///
-/// [^note] Implemented by `Layout`
-trait ButtonHandler {
-    fn button_press(event: Event);
-    fn button_release(event: Event);
-
-    fn input_grab(root: Window);
-
-    fn key_press(event: Event);
+trait WmLayout<T: Connection> {
+    fn manage_window(
+        &self,
+        state: &mut WmState<T>,
+        window: Window,
+        geometry: &GetGeometryReply
+    ) -> Result<(), ReplyOrIdError>;
 }
