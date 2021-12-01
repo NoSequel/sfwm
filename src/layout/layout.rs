@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
 
 use x11rb::{
     connection::Connection,
@@ -8,7 +8,7 @@ use x11rb::{
 };
 
 /// This struct represents the state of a single window within the window manager.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct WindowState {
     pub window: Window,
     pub frame_window: Window,
@@ -29,11 +29,13 @@ impl WindowState {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum DragType {
     Resize,
     Move,
 }
 
+#[derive(Clone, Copy)]
 pub struct DragState {
     pub window: WindowState,
     pub drag_type: DragType,
@@ -57,7 +59,7 @@ pub struct WmState<'a, C: Connection> {
     pub screen_num: usize,
     pub black_gc: Gcontext,
     pub windows: Vec<WindowState>,
-    pub pending_expose: Vec<Window>,
+    pub pending_expose: HashSet<Window>,
     pub wm_protocols: Atom,
     pub wm_delete_window: Atom,
     pub sequences_to_ignore: BinaryHeap<Reverse<u16>>,
@@ -92,7 +94,7 @@ impl<'a, C: Connection> WmState<'a, C> {
             screen_num,
             black_gc,
             windows: vec![],
-            pending_expose: vec![],
+            pending_expose: HashSet::default(),
             wm_protocols: wm_protocols.reply()?.atom,
             wm_delete_window: wm_delete_window.reply()?.atom,
             sequences_to_ignore: Default::default(),
@@ -114,7 +116,7 @@ impl<'a, C: Connection> WmState<'a, C> {
                 let (attributes, geometry) = (attributes.unwrap(), geometry.unwrap());
 
                 if !attributes.override_redirect && attributes.map_state != MapState::UNMAPPED {
-                    self.layout.manage_window(self, window, &geometry);
+                    self.layout.manage_window(self, window, &geometry)?;
                 }
             }
         }
@@ -122,10 +124,13 @@ impl<'a, C: Connection> WmState<'a, C> {
         Ok(())
     }
 
-    pub fn find_window(
-        &self,
-        window: Window,
-    ) -> Option<&WindowState> {
+    pub fn refresh(&mut self) {
+        while let Some(&window) = self.pending_expose.iter().next() {
+            self.pending_expose.remove(&window);
+        }
+    }
+
+    pub fn find_window(&self, window: Window) -> Option<&WindowState> {
         self.windows
             .iter()
             .find(|window_state| self.is_window_id(window, window_state))
@@ -135,7 +140,7 @@ impl<'a, C: Connection> WmState<'a, C> {
         window == state.window || window == state.frame_window
     }
 
-    fn handle_event(&mut self, event: Event) -> Result<(), ReplyOrIdError> {
+    pub fn handle_event(&mut self, event: Event) -> Result<(), ReplyOrIdError> {
         if let Some(sequence) = event.wire_sequence_number() {
             while let Some(&Reverse(to_ignore)) = self.sequences_to_ignore.peek() {
                 if to_ignore.wrapping_sub(sequence) <= u16::max_value() / 2 {

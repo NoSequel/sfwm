@@ -1,7 +1,58 @@
 mod layout;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (connection, screen_num) = x11rb::connect(None).unwrap();
+use crate::layout::floating::FloatingWmLayout;
+use crate::layout::layout::WmState;
+use std::process::exit;
+use x11rb::{
+    connection::Connection,
+    protocol::{xproto::*, ErrorKind, Event},
+    rust_connection::ReplyError,
+};
 
-    println!("Hello, world!");
+fn main() {
+    let (connection, screen_num) = x11rb::connect(None).unwrap();
+    let screen = &connection.setup().roots[screen_num];
+
+    let connection = &connection;
+
+    become_wm(connection, screen).unwrap();
+
+    let mut wm_state = WmState::new(connection, &FloatingWmLayout {}, screen_num).unwrap();
+
+    wm_state.scan_windows().unwrap();
+
+    loop {
+        wm_state.refresh();
+        connection.flush().unwrap();
+
+        let event = connection.wait_for_event().unwrap();
+        let mut event_option = Some(event);
+
+        while let Some(event) = event_option {
+            if let Event::ClientMessage(_) = event {
+                return;
+            }
+
+            wm_state.handle_event(event).unwrap();
+            event_option = connection.poll_for_event().unwrap();
+        }
+    }
+}
+
+fn become_wm<C: Connection>(connection: &C, screen: &Screen) -> Result<(), ReplyError> {
+    let change = ChangeWindowAttributesAux::default()
+        .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
+
+    let response = connection
+        .change_window_attributes(screen.root, &change)?
+        .check();
+
+    if let Err(ReplyError::X11Error(ref error)) = response {
+        if error.error_kind == ErrorKind::Access {
+            eprintln!("Failed to start! Is another WM already running?");
+            exit(1);
+        }
+    }
+
+    return response;
 }

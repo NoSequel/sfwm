@@ -1,7 +1,8 @@
-use crate::layout::layout::{DragState, WmLayout, WmState};
-use x11rb::{CURRENT_TIME, connection::Connection, protocol::xproto::*};
+use crate::layout::layout::{DragState, WindowState, WmLayout, WmState};
+use std::cmp::Reverse;
+use x11rb::{connection::Connection, protocol::xproto::*, COPY_DEPTH_FROM_PARENT, CURRENT_TIME};
 
-struct FloatingWmLayout;
+pub struct FloatingWmLayout;
 
 impl<T: Connection> WmLayout<T> for FloatingWmLayout {
     fn motion_notify(
@@ -31,7 +32,7 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
             state.drag_window = None;
         }
 
-        if let Some(window_state) = state.find_window(event.event) {
+        if let Some(_) = state.find_window(event.event) {
             // button event handling
         }
 
@@ -63,23 +64,23 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         event: x11rb::protocol::xproto::EnterNotifyEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
         if let Some(window_state) = state.find_window(event.event) {
-            state
-                .connection
-                .set_input_focus(InputFocus::PARENT, window_state.window, CURRENT_TIME)?;
+            state.connection.set_input_focus(
+                InputFocus::PARENT,
+                window_state.window,
+                CURRENT_TIME,
+            )?;
 
-            state
-                .connection
-                .configure_window(
-                    window_state.frame_window,
-                    &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
-                )?;
+            state.connection.configure_window(
+                window_state.frame_window,
+                &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
+            )?;
         }
 
         Ok(())
     }
 
     fn expose(&self, state: &mut WmState<T>, event: x11rb::protocol::xproto::ExposeEvent) {
-        state.pending_expose.push(event.window);
+        state.pending_expose.insert(event.window);
     }
 
     fn map_request(
@@ -100,7 +101,17 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         &self,
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::ConfigureRequestEvent,
-    ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> { 
+    ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+        if let Some(_) = state.find_window(event.window) {
+            unimplemented!();
+        }
+
+        let aux = ConfigureWindowAux::from_configure_request(&event)
+            .sibling(None)
+            .stack_mode(None);
+
+        state.connection.configure_window(event.window, &aux)?;
+
         Ok(())
     }
 
@@ -109,6 +120,27 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::UnmapNotifyEvent,
     ) {
+        let connection = state.connection;
+        let root = connection.setup().roots[state.screen_num].root;
+
+        state.windows.retain(|window_state| {
+            if window_state.window != event.window {
+                return true;
+            }
+
+            connection
+                .change_save_set(SetMode::DELETE, window_state.window)
+                .unwrap();
+            connection
+                .reparent_window(window_state.window, root, window_state.x, window_state.y)
+                .unwrap();
+
+            connection
+                .destroy_window(window_state.frame_window)
+                .unwrap();
+
+            return false;
+        });
     }
 
     fn manage_window(
@@ -117,6 +149,53 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         window: x11rb::protocol::xproto::Window,
         geometry: &x11rb::protocol::xproto::GetGeometryReply,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+        let connection = state.connection;
+        let screen = &connection.setup().roots[state.screen_num];
+
+        let frame_window = state.connection.generate_id()?;
+        let window_aux = CreateWindowAux::new()
+            .event_mask(
+                EventMask::EXPOSURE
+                    | EventMask::SUBSTRUCTURE_NOTIFY
+                    | EventMask::BUTTON_PRESS
+                    | EventMask::BUTTON_RELEASE
+                    | EventMask::POINTER_MOTION
+                    | EventMask::ENTER_WINDOW,
+            )
+            .background_pixel(screen.white_pixel);
+
+        connection.create_window(
+            COPY_DEPTH_FROM_PARENT,
+            frame_window,
+            screen.root,
+            geometry.x,
+            geometry.y,
+            geometry.width,
+            geometry.height,
+            1,
+            WindowClass::INPUT_OUTPUT,
+            0,
+            &window_aux,
+        )?;
+
+        connection.grab_server()?;
+        connection.change_save_set(SetMode::INSERT, window)?;
+
+        let cookie = connection.reparent_window(window, frame_window, 0, 0)?;
+
+        connection.map_window(window)?;
+        connection.map_window(frame_window)?;
+
+        connection.ungrab_server()?;
+
+        state
+            .windows
+            .push(WindowState::new(window, frame_window, geometry));
+
+        state
+            .sequences_to_ignore
+            .push(Reverse(cookie.sequence_number() as u16));
+
         Ok(())
     }
 }
