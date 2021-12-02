@@ -65,10 +65,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pkg-config"
+version = "0.3.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12295df4f294471248581bc09bef3c38a5e46f1e36d6a37353621a0c6c357e1f"
+
+[[package]]
 name = "sfwm"
 version = "0.1.0"
 dependencies = [
  "x11rb",
+ "xmodmap-pke",
 ]
 
 [[package]]
@@ -103,6 +110,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
+name = "x11"
+version = "2.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dd0565fa8bfba8c5efe02725b14dff114c866724eff2cfd44d76cea74bcd87a"
+dependencies = [
+ "libc",
+ "pkg-config",
+]
+
+[[package]]
 name = "x11rb"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -112,4 +129,14 @@ dependencies = [
  "nix",
  "winapi",
  "winapi-wsapoll",
+]
+
+[[package]]
+name = "xmodmap-pke"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d95d3c9a11f1bef830b6a8f822c5764cd7d9ee2b04c43511116c3083e51a3b56"
+dependencies = [
+ "libc",
+ "x11",
 ]
