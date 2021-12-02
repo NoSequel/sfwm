@@ -1,3 +1,6 @@
+#[macro_use]
+pub extern crate lazy_static;
+
 pub mod config;
 mod input;
 mod layout;
@@ -21,7 +24,7 @@ fn main() {
     let (connection, screen_num) = x11rb::connect(None).unwrap();
     let screen = &connection.setup().roots[screen_num];
 
-    let mut connection = &mut connection;
+    let connection = &connection;
 
     become_wm(connection, screen).unwrap();
 

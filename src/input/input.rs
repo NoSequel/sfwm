@@ -8,7 +8,7 @@ use crate::input::bindings::BindingRegistration;
 use crate::WmState;
 
 pub struct WmInputHandler<'a, C: Connection> {
-    pub connection: &'a mut C,
+    pub connection: &'a C,
     pub key_press_handler: &'a dyn KeyPressHandler<C>,
     pub root: Window,
     pub binding_registration: BindingRegistration<'a>,
@@ -17,7 +17,7 @@ pub struct WmInputHandler<'a, C: Connection> {
 
 impl<'a, C: Connection> WmInputHandler<'a, C> {
     pub fn new(
-        connection: &'a mut C,
+        connection: &'a C,
         root: Window,
         key_press_handler: &'a dyn KeyPressHandler<C>,
         binding_registration: BindingRegistration<'a>,
@@ -39,7 +39,7 @@ impl<'a, C: Connection> WmInputHandler<'a, C> {
         let modifiers = &[0, u16::from(ModMask::M2)];
 
         for modifier in modifiers {
-            for key in self.binding_registration.key_bindings {
+            for key in &self.binding_registration.key_bindings {
                 self.connection.grab_key(
                     false,
                     self.root,
@@ -58,28 +58,24 @@ impl<'a, C: Connection> WmInputHandler<'a, C> {
 pub trait KeyPressHandler<T: Connection> {
     fn button_press(
         &self,
-        state: &mut WmState<T>,
         input_handler: &mut WmInputHandler<T>,
         event: ButtonPressEvent,
     ) -> Result<(), ReplyOrIdError>;
 
     fn button_release(
         &self,
-        state: &mut WmState<T>,
         input_handler: &mut WmInputHandler<T>,
         event: ButtonReleaseEvent,
     ) -> Result<(), ReplyOrIdError>;
 
     fn key_press(
         &self,
-        state: &mut WmState<T>,
         input_handler: &mut WmInputHandler<T>,
         event: KeyPressEvent,
     ) -> Result<(), ReplyOrIdError>;
 
     fn key_release(
         &self,
-        state: &mut WmState<T>,
         input_handler: &mut WmInputHandler<T>,
         event: KeyReleaseEvent,
     ) -> Result<(), ReplyOrIdError>;

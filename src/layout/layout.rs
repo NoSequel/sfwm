@@ -173,16 +173,13 @@ impl<'a, C: Connection> WmState<'a, C> {
                 Event::MapRequest(event) => layout.map_request(self, event)?,
                 Event::Expose(event) => layout.expose(self, event),
                 Event::EnterNotify(event) => layout.enter(self, event)?,
-                Event::ButtonPress(event) => {
-                    key_handler.button_press(self, self.input_handler, event)?
-                }
+                Event::LeaveNotify(event) => layout.leave(self, event)?,
+                Event::ButtonPress(event) => key_handler.button_press(self.input_handler, event)?,
                 Event::ButtonRelease(event) => {
-                    key_handler.button_release(self, self.input_handler, event)?
+                    key_handler.button_release(self.input_handler, event)?
                 }
-                Event::KeyPress(event) => key_handler.key_press(self, self.input_handler, event)?,
-                Event::KeyRelease(event) => {
-                    key_handler.key_release(self, self.input_handler, event)?
-                }
+                Event::KeyPress(event) => key_handler.key_press(self.input_handler, event)?,
+                Event::KeyRelease(event) => key_handler.key_release(self.input_handler, event)?,
                 Event::MotionNotify(event) => layout.motion_notify(self, event)?,
                 _ => (),
             }
@@ -232,6 +229,7 @@ pub trait WmLayout<T: Connection> {
     );
 
     fn enter(&self, state: &mut WmState<T>, event: EnterNotifyEvent) -> Result<(), ReplyOrIdError>;
+    fn leave(&self, state: &mut WmState<T>, event: LeaveNotifyEvent) -> Result<(), ReplyOrIdError>;
 
     fn motion_notify(
         &self,

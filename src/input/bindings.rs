@@ -9,7 +9,7 @@ pub struct BindingRegistration<'a> {
 
 impl<'a> BindingRegistration<'a> {
     pub fn new() -> Self {
-        let registration = Self {
+        let mut registration = Self {
             mouse_bindings: vec![],
             key_bindings: vec![],
             code_map: xmodmap_pke::xmodmap_pke().unwrap(),
@@ -22,9 +22,12 @@ impl<'a> BindingRegistration<'a> {
 
     pub fn read_keybinds(&self) -> Vec<KeyBinding<'a>> {
         crate::config::KEY_BINDINGS
-            .into_iter()
+            .iter()
             .map(|(button, action)| match self.parse_key(button.to_owned()) {
-                Some(button) => KeyBinding::new(button, &|| action()),
+                Some(button) => KeyBinding {
+                    key: button,
+                    action,
+                },
                 None => panic!("Unable to parse button pattern {}", button),
             })
             .collect()
@@ -39,9 +42,10 @@ impl<'a> BindingRegistration<'a> {
                     .iter()
                     .map(|&option| match option {
                         "A" => u16::from(ModMask::M1),
-                        "M" | "Mod" => crate::config::MOD_KEY,
+                        "M" | "Mod" => u16::from(ModMask::M4),
                         "S" | "Shift" => u16::from(ModMask::SHIFT),
                         "C" | "Control" | "Ctrl" => u16::from(ModMask::CONTROL),
+                        _ => 0,
                     })
                     .fold(0, |acc, v| acc | v);
 
@@ -55,9 +59,9 @@ impl<'a> BindingRegistration<'a> {
     }
 
     pub fn to_key(&self, character: String) -> Option<u8> {
-        for (key, options) in self.code_map {
+        for (key, options) in &self.code_map {
             if let Some(_) = options.iter().find(|option| option == &&character) {
-                return Some(key);
+                return Some(*key);
             }
         }
 

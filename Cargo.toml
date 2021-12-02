@@ -7,4 +7,5 @@ edition = "2018"
 
 [dependencies]
 x11rb = { version = "0.9.0", features = ["all-extensions"] } 
+lazy_static = "1.4.0"
 xmodmap-pke = "0.2.3"

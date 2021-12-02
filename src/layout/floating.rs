@@ -1,4 +1,4 @@
-use crate::layout::layout::{DragState, WindowState, WmLayout, WmState};
+use crate::layout::layout::{WindowState, WmLayout, WmState};
 use std::cmp::Reverse;
 use x11rb::{
     connection::Connection, protocol::xproto::*, rust_connection::ReplyOrIdError,
@@ -26,75 +26,6 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         Ok(())
     }
 
-    fn key_press(
-        &self,
-        state: &mut WmState<T>,
-        event: KeyPressEvent,
-    ) -> Result<(), ReplyOrIdError> {
-        state.pressed_keys.insert(event.detail);
-        println!("{}", event.detail);
-
-        Ok(())
-    }
-
-    fn key_release(
-        &self,
-        state: &mut WmState<T>,
-        event: KeyReleaseEvent,
-    ) -> Result<(), ReplyOrIdError> {
-        state.pressed_keys.insert(event.detail);
-
-        Ok(())
-    }
-
-    fn button_release(
-        &self,
-        state: &mut WmState<T>,
-        event: x11rb::protocol::xproto::ButtonReleaseEvent,
-    ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
-        // remove the key from the pressed key set
-        state.pressed_buttons.remove(&event.detail);
-
-        if event.detail == 1 {
-            state.drag_window = None;
-        }
-
-        if let Some(_) = state.find_window(event.event) {
-            // button event handling
-        }
-
-        Ok(())
-    }
-
-    fn button_press(
-        &self,
-        state: &mut WmState<T>,
-        event: x11rb::protocol::xproto::ButtonPressEvent,
-    ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
-        // register the key as pressed
-        state.pressed_buttons.insert(event.detail);
-
-        if event.detail == 1
-            && state
-                .binding_registration
-                .pressed_masks
-                .contains(&crate::config::MOD_KEY)
-        {
-            if let Some(window_state) = state.find_window(event.event) {
-                state.drag_window = Some(DragState::new(
-                    *window_state,
-                    super::layout::DragType::Move,
-                    -event.event_x,
-                    -event.event_y,
-                ));
-            }
-        }
-
-        println!("{}", event.detail);
-
-        Ok(())
-    }
-
     fn enter(
         &self,
         state: &mut WmState<T>,
@@ -113,6 +44,10 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
             )?;
         }
 
+        Ok(())
+    }
+
+    fn leave(&self, state: &mut WmState<T>, event: LeaveNotifyEvent) -> Result<(), ReplyOrIdError> {
         Ok(())
     }
 
