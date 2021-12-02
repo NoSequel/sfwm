@@ -1,3 +1,4 @@
+pub mod config;
 mod layout;
 
 use crate::layout::floating::FloatingWmLayout;
@@ -10,6 +11,8 @@ use x11rb::{
 };
 
 fn main() {
+    println!("Starting sfwm (Simple Fucking Window Manager)");
+
     let (connection, screen_num) = x11rb::connect(None).unwrap();
     let screen = &connection.setup().roots[screen_num];
 
@@ -40,8 +43,14 @@ fn main() {
 }
 
 fn become_wm<C: Connection>(connection: &C, screen: &Screen) -> Result<(), ReplyError> {
-    let change = ChangeWindowAttributesAux::default()
-        .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
+    let change = ChangeWindowAttributesAux::default().event_mask(
+        EventMask::SUBSTRUCTURE_REDIRECT
+            | EventMask::SUBSTRUCTURE_NOTIFY
+            | EventMask::BUTTON_PRESS
+            | EventMask::BUTTON_RELEASE
+            | EventMask::KEY_PRESS
+            | EventMask::KEY_RELEASE,
+    );
 
     let response = connection
         .change_window_attributes(screen.root, &change)?

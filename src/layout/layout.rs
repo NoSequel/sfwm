@@ -64,6 +64,10 @@ pub struct WmState<'a, C: Connection> {
     pub wm_delete_window: Atom,
     pub sequences_to_ignore: BinaryHeap<Reverse<u16>>,
     pub drag_window: Option<DragState>,
+
+    pub pressed_keys: HashSet<Keycode>,
+    pub pressed_buttons: HashSet<Button>,
+    
     pub layout: &'a dyn WmLayout<C>,
 }
 
@@ -77,6 +81,8 @@ impl<'a, C: Connection> WmState<'a, C> {
         let black_gc = connection.generate_id()?;
         let font = connection.generate_id()?;
 
+        connection.open_font(font, b"9x15")?;
+
         let gc_aux = CreateGCAux::new()
             .graphics_exposures(0)
             .background(screen.white_pixel)
@@ -84,6 +90,7 @@ impl<'a, C: Connection> WmState<'a, C> {
             .font(font);
 
         connection.create_gc(black_gc, screen.root, &gc_aux)?;
+        connection.close_font(font)?;
 
         let wm_protocols = connection.intern_atom(false, b"WM_PROTOCOLS")?;
         let wm_delete_window = connection.intern_atom(false, b"WM_DELETE_WINDOW")?;
@@ -98,6 +105,10 @@ impl<'a, C: Connection> WmState<'a, C> {
             wm_protocols: wm_protocols.reply()?.atom,
             wm_delete_window: wm_delete_window.reply()?.atom,
             sequences_to_ignore: Default::default(),
+
+            pressed_keys: HashSet::default(),
+            pressed_buttons: HashSet::default(),
+            
             drag_window: None,
         })
     }
@@ -141,26 +152,37 @@ impl<'a, C: Connection> WmState<'a, C> {
     }
 
     pub fn handle_event(&mut self, event: Event) -> Result<(), ReplyOrIdError> {
+        let mut should_ignore = false;
+
         if let Some(sequence) = event.wire_sequence_number() {
             while let Some(&Reverse(to_ignore)) = self.sequences_to_ignore.peek() {
                 if to_ignore.wrapping_sub(sequence) <= u16::max_value() / 2 {
-                    return Ok(());
+                    should_ignore = to_ignore == sequence;
+                    break;
                 }
             }
+
+            self.sequences_to_ignore.pop();
         }
 
-        let layout = self.layout;
+        if !should_ignore {
+            let layout = self.layout;
 
-        match event {
-            Event::UnmapNotify(event) => layout.unmap_notify(self, event),
-            Event::ConfigureRequest(event) => layout.configure_request(self, event)?,
-            Event::MapRequest(event) => layout.map_request(self, event)?,
-            Event::Expose(event) => layout.expose(self, event),
-            Event::EnterNotify(event) => layout.enter(self, event)?,
-            Event::ButtonPress(event) => layout.button_press(self, event)?,
-            Event::ButtonRelease(event) => layout.button_release(self, event)?,
-            Event::MotionNotify(event) => layout.motion_notify(self, event)?,
-            _ => println!("Unhandled X11 event, {:?}", event),
+            match event {
+                Event::UnmapNotify(event) => layout.unmap_notify(self, event),
+                Event::ConfigureRequest(event) => layout.configure_request(self, event)?,
+                Event::MapRequest(event) => layout.map_request(self, event)?,
+                Event::Expose(event) => layout.expose(self, event),
+                Event::EnterNotify(event) => layout.enter(self, event)?,
+                Event::ButtonPress(event) => layout.button_press(self, event)?,
+                Event::ButtonRelease(event) => layout.button_release(self, event)?,
+                Event::KeyPress(event) => layout.key_press(self, event)?,
+                Event::KeyRelease(event) => layout.key_release(self, event)?,
+                Event::MotionNotify(event) => layout.motion_notify(self, event)?,
+                _ => (),
+            }
+        } else {
+            println!("ignored {:?}", event);
         }
 
         Ok(())
@@ -205,6 +227,15 @@ pub trait WmLayout<T: Connection> {
     );
 
     fn enter(&self, state: &mut WmState<T>, event: EnterNotifyEvent) -> Result<(), ReplyOrIdError>;
+
+    fn key_press(&self, state: &mut WmState<T>, event: KeyPressEvent)
+        -> Result<(), ReplyOrIdError>;
+
+    fn key_release(
+        &self,
+        state: &mut WmState<T>,
+        event: KeyReleaseEvent,
+    ) -> Result<(), ReplyOrIdError>;
 
     fn button_press(
         &self,

@@ -1,6 +1,9 @@
 use crate::layout::layout::{DragState, WindowState, WmLayout, WmState};
 use std::cmp::Reverse;
-use x11rb::{connection::Connection, protocol::xproto::*, COPY_DEPTH_FROM_PARENT, CURRENT_TIME};
+use x11rb::{
+    connection::Connection, protocol::xproto::*, rust_connection::ReplyOrIdError,
+    COPY_DEPTH_FROM_PARENT, CURRENT_TIME,
+};
 
 pub struct FloatingWmLayout;
 
@@ -23,11 +26,35 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         Ok(())
     }
 
+    fn key_press(
+        &self,
+        state: &mut WmState<T>,
+        event: KeyPressEvent,
+    ) -> Result<(), ReplyOrIdError> {
+        state.pressed_keys.insert(event.detail);
+        println!("{}", event.detail);
+
+        Ok(())
+    }
+
+    fn key_release(
+        &self,
+        state: &mut WmState<T>,
+        event: KeyReleaseEvent,
+    ) -> Result<(), ReplyOrIdError> {
+        state.pressed_keys.insert(event.detail);
+
+        Ok(())
+    }
+
     fn button_release(
         &self,
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::ButtonReleaseEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+        // remove the key from the pressed key set
+        state.pressed_buttons.remove(&event.detail);
+
         if event.detail == 1 {
             state.drag_window = None;
         }
@@ -44,7 +71,10 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         state: &mut WmState<T>,
         event: x11rb::protocol::xproto::ButtonPressEvent,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
-        if event.detail == 1 {
+        // register the key as pressed
+        state.pressed_buttons.insert(event.detail);
+
+        if event.detail == 1 && state.pressed_keys.contains(&crate::config::MOD_KEY) {
             if let Some(window_state) = state.find_window(event.event) {
                 state.drag_window = Some(DragState::new(
                     *window_state,
@@ -54,6 +84,8 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
                 ));
             }
         }
+
+        println!("{}", event.detail);
 
         Ok(())
     }
@@ -149,20 +181,22 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         window: x11rb::protocol::xproto::Window,
         geometry: &x11rb::protocol::xproto::GetGeometryReply,
     ) -> Result<(), x11rb::rust_connection::ReplyOrIdError> {
+        println!("Handling {}", window);
+
         let connection = state.connection;
         let screen = &connection.setup().roots[state.screen_num];
 
         let frame_window = state.connection.generate_id()?;
-        let window_aux = CreateWindowAux::new()
-            .event_mask(
-                EventMask::EXPOSURE
-                    | EventMask::SUBSTRUCTURE_NOTIFY
-                    | EventMask::BUTTON_PRESS
-                    | EventMask::BUTTON_RELEASE
-                    | EventMask::POINTER_MOTION
-                    | EventMask::ENTER_WINDOW,
-            )
-            .background_pixel(screen.white_pixel);
+        let window_aux = CreateWindowAux::new().event_mask(
+            EventMask::EXPOSURE
+                | EventMask::SUBSTRUCTURE_NOTIFY
+                | EventMask::BUTTON_PRESS
+                | EventMask::BUTTON_RELEASE
+                | EventMask::KEY_PRESS
+                | EventMask::KEY_RELEASE
+                | EventMask::POINTER_MOTION
+                | EventMask::ENTER_WINDOW,
+        );
 
         connection.create_window(
             COPY_DEPTH_FROM_PARENT,
@@ -170,8 +204,8 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
             screen.root,
             geometry.x,
             geometry.y,
-            geometry.width,
-            geometry.height,
+            geometry.width + 200,
+            geometry.height + 200,
             1,
             WindowClass::INPUT_OUTPUT,
             0,
