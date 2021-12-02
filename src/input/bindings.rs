@@ -39,9 +39,9 @@ impl<'a> BindingRegistration<'a> {
                     .iter()
                     .map(|&option| match option {
                         "A" => u16::from(ModMask::M1),
-                        "M" => crate::config::MOD_KEY,
-                        "S" => u16::from(ModMask::SHIFT),
-                        "C" => u16::from(ModMask::CONTROL),
+                        "M" | "Mod" => crate::config::MOD_KEY,
+                        "S" | "Shift" => u16::from(ModMask::SHIFT),
+                        "C" | "Control" | "Ctrl" => u16::from(ModMask::CONTROL),
                     })
                     .fold(0, |acc, v| acc | v);
 

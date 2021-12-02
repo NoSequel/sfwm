@@ -74,7 +74,12 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
         // register the key as pressed
         state.pressed_buttons.insert(event.detail);
 
-        if event.detail == 1 && state.pressed_keys.contains(&crate::config::MOD_KEY) {
+        if event.detail == 1
+            && state
+                .binding_registration
+                .pressed_masks
+                .contains(&crate::config::MOD_KEY)
+        {
             if let Some(window_state) = state.find_window(event.event) {
                 state.drag_window = Some(DragState::new(
                     *window_state,

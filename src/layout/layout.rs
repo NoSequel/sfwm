@@ -1,6 +1,8 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
 
+use crate::input::input::WmInputHandler;
+
 use x11rb::{
     connection::Connection,
     protocol::{xproto::*, Event},
@@ -65,16 +67,15 @@ pub struct WmState<'a, C: Connection> {
     pub sequences_to_ignore: BinaryHeap<Reverse<u16>>,
     pub drag_window: Option<DragState>,
 
-    pub pressed_keys: HashSet<Keycode>,
-    pub pressed_buttons: HashSet<Button>,
-
     pub layout: &'a dyn WmLayout<C>,
+    pub input_handler: &'a mut WmInputHandler<'a, C>,
 }
 
 impl<'a, C: Connection> WmState<'a, C> {
     pub fn new(
         connection: &'a C,
         layout: &'a dyn WmLayout<C>,
+        input_handler: &'a mut WmInputHandler<'a, C>,
         screen_num: usize,
     ) -> Result<WmState<'a, C>, ReplyOrIdError> {
         let screen = &connection.setup().roots[screen_num];
@@ -98,6 +99,7 @@ impl<'a, C: Connection> WmState<'a, C> {
         Ok(Self {
             connection,
             layout,
+            input_handler,
             screen_num,
             black_gc,
             windows: vec![],
@@ -105,10 +107,6 @@ impl<'a, C: Connection> WmState<'a, C> {
             wm_protocols: wm_protocols.reply()?.atom,
             wm_delete_window: wm_delete_window.reply()?.atom,
             sequences_to_ignore: Default::default(),
-
-            pressed_keys: HashSet::default(),
-            pressed_buttons: HashSet::default(),
-
             drag_window: None,
         })
     }
@@ -167,6 +165,7 @@ impl<'a, C: Connection> WmState<'a, C> {
 
         if !should_ignore {
             let layout = self.layout;
+            let key_handler = self.input_handler.key_press_handler;
 
             match event {
                 Event::UnmapNotify(event) => layout.unmap_notify(self, event),
@@ -174,10 +173,16 @@ impl<'a, C: Connection> WmState<'a, C> {
                 Event::MapRequest(event) => layout.map_request(self, event)?,
                 Event::Expose(event) => layout.expose(self, event),
                 Event::EnterNotify(event) => layout.enter(self, event)?,
-                Event::ButtonPress(event) => layout.button_press(self, event)?,
-                Event::ButtonRelease(event) => layout.button_release(self, event)?,
-                Event::KeyPress(event) => layout.key_press(self, event)?,
-                Event::KeyRelease(event) => layout.key_release(self, event)?,
+                Event::ButtonPress(event) => {
+                    key_handler.button_press(self, self.input_handler, event)?
+                }
+                Event::ButtonRelease(event) => {
+                    key_handler.button_release(self, self.input_handler, event)?
+                }
+                Event::KeyPress(event) => key_handler.key_press(self, self.input_handler, event)?,
+                Event::KeyRelease(event) => {
+                    key_handler.key_release(self, self.input_handler, event)?
+                }
                 Event::MotionNotify(event) => layout.motion_notify(self, event)?,
                 _ => (),
             }
@@ -227,27 +232,6 @@ pub trait WmLayout<T: Connection> {
     );
 
     fn enter(&self, state: &mut WmState<T>, event: EnterNotifyEvent) -> Result<(), ReplyOrIdError>;
-
-    fn key_press(&self, state: &mut WmState<T>, event: KeyPressEvent)
-        -> Result<(), ReplyOrIdError>;
-
-    fn key_release(
-        &self,
-        state: &mut WmState<T>,
-        event: KeyReleaseEvent,
-    ) -> Result<(), ReplyOrIdError>;
-
-    fn button_press(
-        &self,
-        state: &mut WmState<T>,
-        event: ButtonPressEvent,
-    ) -> Result<(), ReplyOrIdError>;
-
-    fn button_release(
-        &self,
-        state: &mut WmState<T>,
-        event: ButtonReleaseEvent,
-    ) -> Result<(), ReplyOrIdError>;
 
     fn motion_notify(
         &self,

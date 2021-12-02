@@ -2,6 +2,10 @@ pub mod config;
 mod input;
 mod layout;
 
+use crate::input::bindings::BindingRegistration;
+use crate::input::floating::FloatingKeyPressHandler;
+use crate::input::input::WmInputHandler;
+
 use crate::layout::floating::FloatingWmLayout;
 use crate::layout::layout::WmState;
 use std::process::exit;
@@ -17,11 +21,20 @@ fn main() {
     let (connection, screen_num) = x11rb::connect(None).unwrap();
     let screen = &connection.setup().roots[screen_num];
 
-    let connection = &connection;
+    let mut connection = &mut connection;
 
     become_wm(connection, screen).unwrap();
 
-    let mut wm_state = WmState::new(connection, &FloatingWmLayout {}, screen_num).unwrap();
+    let keybind_registration = BindingRegistration::new();
+    let input_handler = &mut WmInputHandler::new(
+        connection,
+        screen.root,
+        &FloatingKeyPressHandler {},
+        keybind_registration,
+    );
+
+    let mut wm_state =
+        WmState::new(connection, &FloatingWmLayout {}, input_handler, screen_num).unwrap();
 
     wm_state.scan_windows().unwrap();
 
