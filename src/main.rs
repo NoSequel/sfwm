@@ -6,7 +6,7 @@ mod input;
 mod layout;
 
 use crate::input::bindings::BindingRegistration;
-use crate::input::floating::FloatingKeyPressHandler;
+use crate::input::input::KeyPressHandler;
 use crate::input::input::WmInputHandler;
 
 use crate::layout::floating::FloatingWmLayout;
@@ -29,15 +29,14 @@ fn main() {
     become_wm(connection, screen).unwrap();
 
     let keybind_registration = BindingRegistration::new();
-    let input_handler = &mut WmInputHandler::new(
-        connection,
-        screen.root,
-        &FloatingKeyPressHandler {},
-        keybind_registration,
-    );
+    let input_handler = &mut WmInputHandler::new(connection, screen.root, keybind_registration);
 
-    let mut wm_state =
-        WmState::new(connection, &FloatingWmLayout {}, input_handler, screen_num).unwrap();
+    let key_press_handler = &mut KeyPressHandler {
+        connection,
+        input_handler,
+    };
+
+    let mut wm_state = WmState::new(connection, &FloatingWmLayout {}, screen_num).unwrap();
 
     wm_state.scan_windows().unwrap();
 
@@ -53,7 +52,9 @@ fn main() {
                 return;
             }
 
+            key_press_handler.handle_event(&event).unwrap();
             wm_state.handle_event(event).unwrap();
+
             event_option = connection.poll_for_event().unwrap();
         }
     }

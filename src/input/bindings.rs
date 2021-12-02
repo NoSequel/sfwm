@@ -69,6 +69,7 @@ impl<'a> BindingRegistration<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct KeyCode {
     pub mask: u16,
     pub code: u8,

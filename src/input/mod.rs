@@ -1,3 +1,3 @@
 pub mod bindings;
-pub mod floating;
+pub mod buffer;
 pub mod input;

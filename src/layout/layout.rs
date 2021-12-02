@@ -1,6 +1,7 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
 
+use crate::input::input::KeyPressHandler;
 use crate::input::input::WmInputHandler;
 
 use x11rb::{
@@ -68,14 +69,12 @@ pub struct WmState<'a, C: Connection> {
     pub drag_window: Option<DragState>,
 
     pub layout: &'a dyn WmLayout<C>,
-    pub input_handler: &'a mut WmInputHandler<'a, C>,
 }
 
 impl<'a, C: Connection> WmState<'a, C> {
     pub fn new(
         connection: &'a C,
         layout: &'a dyn WmLayout<C>,
-        input_handler: &'a mut WmInputHandler<'a, C>,
         screen_num: usize,
     ) -> Result<WmState<'a, C>, ReplyOrIdError> {
         let screen = &connection.setup().roots[screen_num];
@@ -99,7 +98,6 @@ impl<'a, C: Connection> WmState<'a, C> {
         Ok(Self {
             connection,
             layout,
-            input_handler,
             screen_num,
             black_gc,
             windows: vec![],
@@ -165,7 +163,6 @@ impl<'a, C: Connection> WmState<'a, C> {
 
         if !should_ignore {
             let layout = self.layout;
-            let key_handler = self.input_handler.key_press_handler;
 
             match event {
                 Event::UnmapNotify(event) => layout.unmap_notify(self, event),
@@ -174,12 +171,6 @@ impl<'a, C: Connection> WmState<'a, C> {
                 Event::Expose(event) => layout.expose(self, event),
                 Event::EnterNotify(event) => layout.enter(self, event)?,
                 Event::LeaveNotify(event) => layout.leave(self, event)?,
-                Event::ButtonPress(event) => key_handler.button_press(self.input_handler, event)?,
-                Event::ButtonRelease(event) => {
-                    key_handler.button_release(self.input_handler, event)?
-                }
-                Event::KeyPress(event) => key_handler.key_press(self.input_handler, event)?,
-                Event::KeyRelease(event) => key_handler.key_release(self.input_handler, event)?,
                 Event::MotionNotify(event) => layout.motion_notify(self, event)?,
                 _ => (),
             }
