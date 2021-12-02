@@ -17,6 +17,8 @@ impl KeyBuffer {
     }
 
     pub fn is_buffered(&self, key: usize) -> bool {
+        println!("trying: {} contents: {:?}", key, self.buffer);
+
         self.buffer.iter().find(|x| x == &&key).is_some()
     }
 

@@ -48,6 +48,10 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
     }
 
     fn leave(&self, state: &mut WmState<T>, event: LeaveNotifyEvent) -> Result<(), ReplyOrIdError> {
+        state
+            .connection
+            .set_input_focus(InputFocus::PARENT, 0 as u32, CURRENT_TIME)?;
+
         Ok(())
     }
 
@@ -135,7 +139,8 @@ impl<T: Connection> WmLayout<T> for FloatingWmLayout {
                 | EventMask::KEY_PRESS
                 | EventMask::KEY_RELEASE
                 | EventMask::POINTER_MOTION
-                | EventMask::ENTER_WINDOW,
+                | EventMask::ENTER_WINDOW
+                | EventMask::LEAVE_WINDOW,
         );
 
         connection.create_window(

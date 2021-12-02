@@ -25,28 +25,7 @@ impl<'a, C: Connection> WmInputHandler<'a, C> {
             key_buffer: KeyBuffer::new(),
         };
 
-        handler.grab_key_input();
-
         return handler;
-    }
-
-    pub fn grab_key_input(&self) -> Result<(), ReplyOrIdError> {
-        let modifiers = &[0, u16::from(ModMask::M4)];
-
-        for modifier in modifiers {
-            for key in &self.binding_registration.key_bindings {
-                self.connection.grab_key(
-                    false,
-                    self.root,
-                    key.key.mask | modifier,
-                    key.key.code,
-                    GrabMode::ASYNC,
-                    GrabMode::ASYNC,
-                )?;
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -66,6 +45,21 @@ impl<'a, T: Connection> KeyPressHandler<'a, T> {
         }
     }
 
+    pub fn process_key_grab(&mut self) -> Result<(), ReplyOrIdError> {
+        for key in &self.input_handler.binding_registration.key_bindings {
+            self.connection.grab_key(
+                false,
+                self.input_handler.root,
+                key.key.mask,
+                key.key.code,
+                GrabMode::ASYNC,
+                GrabMode::ASYNC,
+            )?;
+        }
+
+        Ok(())
+    }
+
     pub fn button_press(&mut self, event: &ButtonPressEvent) -> Result<(), ReplyOrIdError> {
         Ok(())
     }
@@ -79,7 +73,7 @@ impl<'a, T: Connection> KeyPressHandler<'a, T> {
 
         self.input_handler
             .key_buffer
-            .add_to_buffer(event.event as usize);
+            .add_to_buffer(event.detail as usize);
 
         for bind in registration.key_bindings.iter() {
             if self.input_handler.key_buffer.is_pressed(bind.key) {
@@ -93,7 +87,7 @@ impl<'a, T: Connection> KeyPressHandler<'a, T> {
     pub fn key_release(&mut self, event: &KeyReleaseEvent) -> Result<(), ReplyOrIdError> {
         self.input_handler
             .key_buffer
-            .remove_from_buffer(event.event as usize);
+            .remove_from_buffer(event.detail as usize);
         Ok(())
     }
 }

@@ -52,6 +52,8 @@ fn main() {
                 return;
             }
 
+            key_press_handler.process_key_grab().unwrap();
+
             key_press_handler.handle_event(&event).unwrap();
             wm_state.handle_event(event).unwrap();
 
@@ -61,14 +63,8 @@ fn main() {
 }
 
 fn become_wm<C: Connection>(connection: &C, screen: &Screen) -> Result<(), ReplyError> {
-    let change = ChangeWindowAttributesAux::default().event_mask(
-        EventMask::SUBSTRUCTURE_REDIRECT
-            | EventMask::SUBSTRUCTURE_NOTIFY
-            | EventMask::BUTTON_PRESS
-            | EventMask::BUTTON_RELEASE
-            | EventMask::KEY_PRESS
-            | EventMask::KEY_RELEASE,
-    );
+    let change = ChangeWindowAttributesAux::default()
+        .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
 
     let response = connection
         .change_window_attributes(screen.root, &change)?

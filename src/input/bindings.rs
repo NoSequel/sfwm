@@ -80,19 +80,7 @@ pub struct MouseBinding<'a> {
     pub action: &'a dyn FnMut(),
 }
 
-impl<'a> MouseBinding<'a> {
-    pub fn new(button: Button, action: &'a dyn FnMut()) -> Self {
-        Self { button, action }
-    }
-}
-
 pub struct KeyBinding<'a> {
     pub key: KeyCode,
     pub action: &'a dyn FnMut(),
-}
-
-impl<'a> KeyBinding<'a> {
-    pub fn new(key: KeyCode, action: &'a dyn FnMut()) -> Self {
-        Self { key, action }
-    }
 }
