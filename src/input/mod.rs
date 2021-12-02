@@ -1,2 +1,2 @@
-pub mod input;
 pub mod bindings;
+pub mod input;

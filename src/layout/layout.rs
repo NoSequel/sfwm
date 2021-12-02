@@ -67,7 +67,7 @@ pub struct WmState<'a, C: Connection> {
 
     pub pressed_keys: HashSet<Keycode>,
     pub pressed_buttons: HashSet<Button>,
-    
+
     pub layout: &'a dyn WmLayout<C>,
 }
 
@@ -108,7 +108,7 @@ impl<'a, C: Connection> WmState<'a, C> {
 
             pressed_keys: HashSet::default(),
             pressed_buttons: HashSet::default(),
-            
+
             drag_window: None,
         })
     }

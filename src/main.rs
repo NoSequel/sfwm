@@ -1,6 +1,6 @@
 pub mod config;
-mod layout;
 mod input;
+mod layout;
 
 use crate::layout::floating::FloatingWmLayout;
 use crate::layout::layout::WmState;
