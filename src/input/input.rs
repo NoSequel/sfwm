@@ -1,5 +1,4 @@
 use crate::input::bindings::BindingRegistration;
-use crate::input::buffer::KeyBuffer;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
@@ -8,17 +7,19 @@ use x11rb::rust_connection::ReplyOrIdError;
 pub struct WmInputHandler<'a, C: Connection> {
     pub connection: &'a C,
     pub root: Window,
-    pub binding_registration: BindingRegistration,
-    pub key_buffer: KeyBuffer,
+    pub binding_registration: BindingRegistration<'a>,
 }
 
 impl<'a, C: Connection> WmInputHandler<'a, C> {
-    pub fn new(connection: &'a C, root: Window, binding_registration: BindingRegistration) -> Self {
+    pub fn new(
+        connection: &'a C,
+        root: Window,
+        binding_registration: BindingRegistration<'a>,
+    ) -> Self {
         let handler = Self {
             connection,
             root,
             binding_registration,
-            key_buffer: KeyBuffer::new(),
         };
 
         return handler;
@@ -42,12 +43,12 @@ impl<'a, T: Connection> KeyPressHandler<'a, T> {
     }
 
     pub fn process_key_grab(&mut self) -> Result<(), ReplyOrIdError> {
-        for key in &self.input_handler.binding_registration.key_bindings {
+        for (key, _) in &self.input_handler.binding_registration.key_bindings {
             self.connection.grab_key(
                 false,
                 self.input_handler.root,
-                key.key.mask,
-                key.key.code,
+                key.mask,
+                key.code,
                 GrabMode::ASYNC,
                 GrabMode::ASYNC,
             )?;
@@ -70,18 +71,15 @@ impl<'a, T: Connection> KeyPressHandler<'a, T> {
             .binding_registration
             .key_bindings
             .iter()
-            .find(|key| key.key.code == event.detail)
+            .find(|(key, _)| key.code == event.detail)
         {
-            (code.action);
+            code.1();
         }
 
         Ok(())
     }
 
     pub fn key_release(&mut self, event: &KeyReleaseEvent) -> Result<(), ReplyOrIdError> {
-        self.input_handler
-            .key_buffer
-            .remove_from_buffer(event.detail as usize);
         Ok(())
     }
 }
