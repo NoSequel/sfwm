@@ -8,16 +8,12 @@ use x11rb::rust_connection::ReplyOrIdError;
 pub struct WmInputHandler<'a, C: Connection> {
     pub connection: &'a C,
     pub root: Window,
-    pub binding_registration: BindingRegistration<'a>,
+    pub binding_registration: BindingRegistration,
     pub key_buffer: KeyBuffer,
 }
 
 impl<'a, C: Connection> WmInputHandler<'a, C> {
-    pub fn new(
-        connection: &'a C,
-        root: Window,
-        binding_registration: BindingRegistration<'a>,
-    ) -> Self {
+    pub fn new(connection: &'a C, root: Window, binding_registration: BindingRegistration) -> Self {
         let handler = Self {
             connection,
             root,
@@ -69,16 +65,14 @@ impl<'a, T: Connection> KeyPressHandler<'a, T> {
     }
 
     pub fn key_press(&mut self, event: &KeyPressEvent) -> Result<(), ReplyOrIdError> {
-        let registration = &self.input_handler.binding_registration;
-
-        self.input_handler
-            .key_buffer
-            .add_to_buffer(event.detail as usize);
-
-        for bind in registration.key_bindings.iter() {
-            if self.input_handler.key_buffer.is_pressed(bind.key) {
-                (bind.action);
-            }
+        if let Some(code) = self
+            .input_handler
+            .binding_registration
+            .key_bindings
+            .iter()
+            .find(|key| key.key.code == event.detail)
+        {
+            (code.action);
         }
 
         Ok(())

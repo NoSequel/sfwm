@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use x11rb::protocol::xproto::*;
 
-pub struct BindingRegistration<'a> {
-    pub mouse_bindings: Vec<MouseBinding<'a>>,
-    pub key_bindings: Vec<KeyBinding<'a>>,
+pub struct BindingRegistration {
+    pub mouse_bindings: Vec<MouseBinding>,
+    pub key_bindings: Vec<KeyBinding>,
     pub code_map: HashMap<u8, Vec<String>>,
 }
 
-impl<'a> BindingRegistration<'a> {
+impl BindingRegistration {
     pub fn new() -> Self {
         let mut registration = Self {
             mouse_bindings: vec![],
@@ -17,19 +17,29 @@ impl<'a> BindingRegistration<'a> {
 
         registration.key_bindings = registration.read_keybinds();
 
+        for keybind in &registration.key_bindings {
+            (keybind.action);
+        }
+
         return registration;
     }
 
-    pub fn read_keybinds(&self) -> Vec<KeyBinding<'a>> {
+    pub fn read_keybinds(&self) -> Vec<KeyBinding> {
+        for (_, action) in crate::config::KEY_BINDINGS.iter() {
+            action();
+        }
+
         crate::config::KEY_BINDINGS
             .iter()
-            .map(|(button, action)| match self.parse_key(button.to_owned()) {
-                Some(button) => KeyBinding {
-                    key: button,
-                    action,
+            .map(
+                |(button, action)| match self.parse_key(button.to_owned()) {
+                    Some(button) => KeyBinding {
+                        key: button,
+                        action: *action,
+                    },
+                    None => panic!("Unable to parse button pattern {}", button),
                 },
-                None => panic!("Unable to parse button pattern {}", button),
-            })
+            )
             .collect()
     }
 
@@ -75,12 +85,12 @@ pub struct KeyCode {
     pub code: u8,
 }
 
-pub struct MouseBinding<'a> {
+pub struct MouseBinding {
     pub button: Button,
-    pub action: &'a dyn FnMut(),
+    pub action: fn(),
 }
 
-pub struct KeyBinding<'a> {
+pub struct KeyBinding {
     pub key: KeyCode,
-    pub action: &'a dyn FnMut(),
+    pub action: fn(),
 }

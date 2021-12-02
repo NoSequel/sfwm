@@ -1,9 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
 
-use crate::input::input::KeyPressHandler;
-use crate::input::input::WmInputHandler;
-
 use x11rb::{
     connection::Connection,
     protocol::{xproto::*, Event},
